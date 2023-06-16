@@ -40,16 +40,15 @@ module student_fc_controller(
         STATE_OUT_RECEIVE       = 1'd1,
         STATE_INPUT_SET         = 1'd1,
         
-        STATE_WEIGHT_SET        = 3'd1,
-
-        STATE_BIAS_SET          = 3'd2;
+        STATE_WEIGHT_SET        = 2'd1,
+        STATE_BIAS_SET          = 2'd2;
 
     // Global Data
-    reg  [63:0] input_feature;
-    reg  [63:0] input_feature_buffer;
-    reg  [63:0] bias_vector;
-    reg  [63:0] weight;
+    reg [31:0] input_feature;
+    reg [31:0] bias;
+    reg [31:0] weight;
     
+
     // BRAM 0 FSM
     // BRAM 0 State
     reg         bram_state0a;
@@ -182,7 +181,7 @@ module student_fc_controller(
 
     // BRAM 1 FSM
     // BRAM 1 State
-    reg  [2:0]  bram_state1;
+    reg   [1:0] bram_state1;
 
     // BRAM 1 Datas
     reg  [15:0] bram_addr1;
@@ -229,9 +228,28 @@ module student_fc_controller(
                 STATE_IDLE: begin
                     bram_state1         <= STATE_IDLE;
                 end
+                STATE_WEIGHT_SET: begin
+                end
+                STATE_BIAS_SET: begin
+                end
             endcase
         end
     end
+
+    mac_controller controller(
+        .clk           (clk),
+        .rstn          (rstn),
+        .en            (en???),
+        .bias_add      (bias_add??),
+        .flush         (flush??),
+
+        .valid         (valid??),
+        .input_feature (input_feature[31:0]),
+        .weight        (weight),
+        .bias          (bias),
+        .result        (result),
+        .done          (done)
+    );
 
     // MAC Control FSM
     always @(posedge clk or negedge rstn) begin

@@ -6,7 +6,7 @@ module mac (
     input wire               rstn,
     input wire               en,
 
-    input wire signed  [7:0] input_feature,
+    input wire         [7:0] input_feature,
     input wire signed  [7:0] weight,
 
     output reg signed [15:0] result,
@@ -16,7 +16,7 @@ module mac (
     wire              en_buffer;
 
     // Data
-    wire signed [7:0] input_feature_buffer;
+    wire        [7:0] input_feature_buffer;
     wire signed [7:0] weight_buffer;
 
     // Pipeline Stage 0

@@ -1,32 +1,35 @@
 `timescale 1ns / 1ps
 
 module mac_controller (
-    input wire         clk,
-    input wire         rstn,
-    input wire         en,
-    input wire         flush,
+    input wire               clk,
+    input wire               rstn,
+    input wire               en,
+    input wire               bias_add,
+    input wire               flush,
 
-    input wire  [31:0] input_feature,
-    input wire  [31:0] weight,
-    input wire   [8:0] bias,
+    input wire         [3:0] valid, // whether Input Data is Valid
+    input wire        [31:0] input_feature,
+    input wire        [31:0] weight,
+    input wire signed  [7:0] bias,
 
-    output reg  [25:0] result,
-    output reg         done
+    output reg signed [25:0] result,
+    output reg               done
 );
-    reg   [3:0] mac_en;
-    wire  [3:0] mac_done;
+    wire         [3:0] mac_en;
+    wire         [3:0] mac_done;
 
-    wire [17:0] mac_result;
+    wire signed [17:0] mac_result;
 
-    wire [15:0] mac_result0;
-    wire [15:0] mac_result1;
-    wire [15:0] mac_result2;
-    wire [15:0] mac_result3;
+    wire signed [15:0] mac_result0;
+    wire signed [15:0] mac_result1;
+    wire signed [15:0] mac_result2;
+    wire signed [15:0] mac_result3;
 
-    assign mac_result =   (mac_done[0] ? mac_result0[15:0] : 16'b0)
-                        + (mac_done[1] ? mac_result1[15:0] : 16'b0)
-                        + (mac_done[2] ? mac_result2[15:0] : 16'b0)
-                        + (mac_done[3] ? mac_result3[15:0] : 16'b0);
+    assign mac_en[3:0] = valid[3:0];
+    assign mac_result  =   (mac_done[0] ? mac_result0[15:0] : 16'b0)
+                         + (mac_done[1] ? mac_result1[15:0] : 16'b0)
+                         + (mac_done[2] ? mac_result2[15:0] : 16'b0)
+                         + (mac_done[3] ? mac_result3[15:0] : 16'b0);
 
     mac mac0 (
         .clk           (clk),
@@ -80,19 +83,22 @@ module mac_controller (
         end
         else begin
             if (en) begin
-                if (mac_done) begin
+                if (bias_add) begin
+                    result <= result + bias;
+                    done   <= 1'b1;
+                end
+                else if (mac_done) begin
                     result <= result + mac_result;
+                    done   <= 1'b0;
+                end
+                else if (flush) begin
+                    result <= 26'b0;
+                    done   <= 1'b0;
                 end
                 else begin
+                    result <= result;
+                    done   <= 1'b0;
                 end
-            end
-            else if (flush) begin
-                result <= 26'b0;
-                done   <= 1'b0;
-            end
-            else begin
-                result <= result;
-                done   <= 1'b0;
             end
         end
     end
