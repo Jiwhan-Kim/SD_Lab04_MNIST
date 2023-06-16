@@ -76,7 +76,7 @@ module student_fc_controller(
     reg   [7:0] bram_counter0b;
     reg         bram_write_done0b;
 
-    blk_mem_gen_0 ( // Simple Dual Port BRAM
+    blk_mem_gen_0 bram0 ( // Simple Dual Port BRAM
         // Port a for Write Data
         .clka     (clk),
         .ena      (bram_en0a),
@@ -197,7 +197,7 @@ module student_fc_controller(
     reg  [7:0]  bram_counter1;
     reg         bram_write_done1;
 
-    blk_mem_gen_1 ( // Single Port BRAM
+    blk_mem_gen_1 bram1 ( // Single Port BRAM
         clka      (clk),
         ena       (bram_en1),
         wea       (bram_we1),
