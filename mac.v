@@ -26,8 +26,8 @@ module mac (
             en_buffer <= 1'b0;
 
             // Data
-            input_feature_buffer <= 8'b0;
-            weight_buffer        <= 8'b0;
+            input_feature_buffer     <= 8'b0;
+            weight_buffer            <= 8'b0;
         end
         else begin
             // Control Signal
@@ -48,10 +48,10 @@ module mac (
     always @(posedge clk or negedge rstn) begin
         if (!rstn) begin
             // Output Data
-            result <= 16'b0;
+            result     <= 16'b0;
 
             // Output Signal
-            done   <= 1'b0;
+            done       <= 1'b0;
         end
         else begin
             if (en_buffer) begin
@@ -59,14 +59,14 @@ module mac (
                 result <= input_feature_buffer * weight_buffer;
 
                 // Output Signal
-                done <= 1'b1;
+                done   <= 1'b1;
             end
             else begin
                 // Output Data
                 result <= 16'b0;
 
                 // Output Signal
-                done <= 1'b0;
+                done   <= 1'b0;
             end
         end
     end

@@ -19,16 +19,17 @@ module student_fc_controller(
         MEM0_AWIDTH             = 9,
         MEM1_AWDITH             = 16,
 
+        Stage                   = 2,        // Two Stage with one Hidden Layer
         X_SIZE_0                = 16'd784,
-        W_SIZE_0                = 16'd300 * 16'd784,
+        W_SIZE_0                = 32'd300 * 32'd784,
         B_SIZE_0                = 16'd300,
 
         X_SIZE_1                = 16'd300,
-        W_SIZE_1                = 16'd10 * 16'd300,
+        W_SIZE_1                = 32'd10 * 32'd300,
         B_SIZE_1                = 16'd10,
 
         INPUT0_START_ADDRESS    = 9'h0,
-        INPUT1_START_ADDRESS    = 9'hc4, // 9'd196
+        INPUT1_START_ADDRESS    = 9'hc4,    // 9'd196
 
         WEIGHT0_START_ADDRESS   = 16'h0,
         BIAS0_START_ADDRESS     = 16'he5b0, // 16'd58800 = (16'd784 * 16'd300) >> 2
@@ -44,10 +45,46 @@ module student_fc_controller(
         STATE_BIAS_SET          = 2'd2;
 
     // Global Data
+    reg  [1:0] layer;
     reg [31:0] input_feature;
     reg [31:0] bias;
     reg [31:0] weight;
     
+    reg  [8:0] INPUT_START_ADDRESS;
+    reg [15:0] WEIGHT_START_ADDRESS;
+    reg [15:0] BIAS_START_ADDRESS;
+
+    reg [15:0] X_SIZE;
+    reg [31:0] W_SIZE;
+    reg [15:0] B_SIZE;
+
+    always @(*) begin
+        case (layer)
+            2'b00: begin
+                INPUT_START_ADDRESS  <= INPUT0_START_ADDRESS;
+                WEIGHT_START_ADDRESS <= WEIGHT0_START_ADDRESS;
+                BIAS_START_ADDRESS   <= BIAS0_START_ADDRESS;
+
+                X_SIZE               <= X_SIZE_0;
+                W_SIZE               <= W_SIZE_0;
+                B_SIZE               <= B_SIZE_0;
+            end
+            2'b01: begin
+                INPUT_START_ADDRESS  <= INPUT1_START_ADDRESS;
+                WEIGHT_START_ADDRESS <= WEIGHT1_START_ADDRESS;
+                BIAS_START_ADDRESS   <= BIAS1_START_ADDRESS;
+
+                X_SIZE               <= X_SIZE_1;
+                W_SIZE               <= W_SIZE_1;
+                B_SIZE               <= B_SIZE_1;
+            end
+            default: begin
+                X_SIZE <= 16'b0;
+                W_SIZE <= 32'b0;
+                B_SIZE <= 16'b0;
+            end
+        endcase
+    end
 
     // BRAM 0 FSM
     // BRAM 0 State
@@ -69,12 +106,13 @@ module student_fc_controller(
 
     // BRAM 0 FSM Control Signals
     reg   [1:0] bram_latency0a;
-    reg   [7:0] bram_counter0a;
+    reg  [15:0] bram_counter0a;
     reg         bram_write_done0a;
 
     reg   [1:0] bram_latency0b;
-    reg   [7:0] bram_counter0b;
+    reg  [15:0] bram_counter0b;
     reg         bram_write_done0b;
+    reg         input_set_done;
 
     blk_mem_gen_0 bram0 ( // Simple Dual Port BRAM
         // Port a for Write Data
@@ -114,7 +152,7 @@ module student_fc_controller(
             case (bram_state0a)
                 STATE_IDLE: begin
                     // BRAM 0 Port a State
-                    if (r_valid) bram_state0a <= STATE_OUT_RECEIVE;
+                    if (r_valid && (layer < STAGE)) bram_state0a <= STATE_OUT_RECEIVE;
                     else bram_state0a <= STATE_IDLE;
 
                     // BRAM 0 Port a Datas
@@ -131,7 +169,7 @@ module student_fc_controller(
                     bram_write_done0a   <= 1'b0;
                 end
                 STATE_OUT_RECEIVE: begin
-
+                    
                 end
             endcase
         end
@@ -153,17 +191,20 @@ module student_fc_controller(
             bram_latency0b      <= 2'b0;
             bram_counter0b      <= 8'b0;
             bram_write_done0b   <= 1'b0;
+            input_set_done      <= 1'b0;
+
+            // Global Data
+            layer               <= 2'b0;
         end
         else begin
             case (bram_state0b)
                 STATE_IDLE: begin
                     // BRAM 0 Port b State
-                    if (r_valid) bram_state0b <= STATE_INPUT_SET;
+                    if (r_valid && (layer < STAGE)) bram_state0b <= STATE_INPUT_SET;
                     else bram_state0b <= STATE_IDLE;
 
                     // BRAM 0 Port b Datas
                     bram_addr0b         <= 9'h1ff; // NULL Address
-                    bram_din0b          <= 32'b0;
                     
                     // BRAM 0 Port b Control Signals
                     bram_en0b           <= 1'b0;
@@ -172,8 +213,34 @@ module student_fc_controller(
                     bram_latency0b      <= 2'b0;
                     bram_counter0b      <= 8'b0;
                     bram_write_done0b   <= 1'b0;
+                    input_set_done      <= 1'b0;
                 end
                 STATE_INPUT_SET: begin
+                    if (bram_counter0b >= (X_SIZE >> 2)) begin
+                    end
+                    else begin
+                        // BRAM 0 Port b State
+                        bram_state0b    <= STATE_INPUT_SET;
+                        
+                        // BRAM 0 Port b Datas
+                        if (bram_counter0b < (X_SIZE >> 2)) begin
+                            bram_addr0b <= INPUT0_
+                        end 
+                        // input_feature
+
+                        // BRAM 0 Port b Control Signals
+                        bram_en0b       <= 1'b1;
+
+                        // BRAM 0 Port b FSM Control Signals
+                        if (bram_latency0b < MEM_LATENCY + 1) begin
+                            bram_latency0b <= bram_latency0b + 1'b1;
+                        end else begin
+                            input_feature 
+                        end
+
+                        bram_counter0b <= bram_counter0b + 1'b1;
+
+                    end
                 end
             endcase
         end
@@ -236,17 +303,35 @@ module student_fc_controller(
         end
     end
 
+    // MAC Controller FSM
+    // MAC Controller State
+    reg          [2:0] mac_state;
+
+    // MAC Datas
+    wire signed [25:0] mac_result;
+    wire         [7:0] mac_result_q;
+
+    // MAC Controller State
+    reg                mac_en;
+    reg                mac_add;
+    reg                mac_flush;
+
+    reg          [3:0] mac_valid;
+
+    reg                ReLU;
+
+
     mac_controller controller(
         .clk           (clk),
         .rstn          (rstn),
-        .en            (en???),
-        .bias_add      (bias_add??),
-        .flush         (flush??),
+        .en            (mac_en),
+        .bias_add      (mac_add),
+        .flush         (mac_flush),
 
-        .valid         (valid??),
+        .valid         (mac_valid),
         .input_feature (input_feature[31:0]),
-        .weight        (weight),
-        .bias          (bias),
+        .weight        (weight[31:0]),
+        .bias          (bias[31:0]),
         .result        (result),
         .done          (done)
     );
@@ -254,8 +339,18 @@ module student_fc_controller(
     // MAC Control FSM
     always @(posedge clk or negedge rstn) begin
         if (!rstn) begin
+
         end
         else begin
+            
         end
     end
+
+    assign mac_result_q = (ReLU) ? (mac_result[25] == 1'b1) ? 8'b0
+                                                            : (mac_result[24:16] == 9'b0)   ? mac_result[15:8]
+                                                                                            : 8'hff
+                                 : (mac_result[25] == 1'b1) ? (mac_result[24:16] == 9'h1ff) ? mac_result[15:8]
+                                                                                            : 8'h80
+                                                            : (mac_result[24:16] == 9'b0)   ? mac_result[15:8]
+                                                                                            : 8'h7f;
 endmodule
