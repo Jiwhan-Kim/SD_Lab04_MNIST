@@ -39,10 +39,12 @@ module student_fc_controller(
         // BRAM States
         STATE_IDLE              =  'd0,
         STATE_OUT_RECEIVE       = 1'd1,
-        STATE_INPUT_SET         = 1'd1,
-        
+        STATE_INPUT_SET         = 2'd1,
         STATE_WEIGHT_SET        = 2'd1,
-        STATE_BIAS_SET          = 2'd2;
+        STATE_BIAS_SET          = 2'd2,
+        STATE_BRAM_CHECK        = 2'd3,
+
+        STATE_ACCM              = 3'd1;
 
     // Global Data
     reg  [1:0] layer;
@@ -57,6 +59,9 @@ module student_fc_controller(
     reg [15:0] X_SIZE;
     reg [31:0] W_SIZE;
     reg [15:0] B_SIZE;
+
+    reg  [15:0] input_cnt;
+    reg  [15:0] output_cnt;
 
     always @(*) begin
         case (layer)
@@ -89,7 +94,7 @@ module student_fc_controller(
     // BRAM 0 FSM
     // BRAM 0 State
     reg         bram_state0a;
-    reg         bram_state0b;
+    reg [1:0]   bram_state0b;
 
     // BRAM 0 Datas
     reg   [8:0] bram_addr0a; // write
@@ -152,8 +157,12 @@ module student_fc_controller(
             case (bram_state0a)
                 STATE_IDLE: begin
                     // BRAM 0 Port a State
-                    if (r_valid && (layer < STAGE)) bram_state0a <= STATE_OUT_RECEIVE;
-                    else bram_state0a <= STATE_IDLE;
+                    if (r_valid && (layer < STAGE) && bram_state0a == STATE_IDLE && bram_state0b == STATE_IDLE && bram_state1 == STATE_IDLE) begin
+                        bram_state0a <= STATE_OUT_RECEIVE;
+                    end 
+                    else begin
+                        bram_state0a <= STATE_IDLE;
+                    end
 
                     // BRAM 0 Port a Datas
                     bram_addr0a         <= 9'h1ff; // NULL Address
@@ -169,7 +178,7 @@ module student_fc_controller(
                     bram_write_done0a   <= 1'b0;
                 end
                 STATE_OUT_RECEIVE: begin
-                    
+                    if ()
                 end
             endcase
         end
@@ -189,19 +198,24 @@ module student_fc_controller(
 
             // BRAM 0 Port b Control Signals
             bram_latency0b      <= 2'b0;
-            bram_counter0b      <= 8'b0;
-            bram_write_done0b   <= 1'b0;
+            bram_counter0b      <= 16'b0;
             input_set_done      <= 1'b0;
 
             // Global Data
-            layer               <= 2'b0;
+            input_feature       <= 32'b0;
+            input_cnt           <= 16'b0;
+            output_cnt          <= 16'b0;
         end
         else begin
             case (bram_state0b)
                 STATE_IDLE: begin
                     // BRAM 0 Port b State
-                    if (r_valid && (layer < STAGE)) bram_state0b <= STATE_INPUT_SET;
-                    else bram_state0b <= STATE_IDLE;
+                    if (r_valid && (layer < STAGE) && bram_state0a == STATE_IDLE && bram_state0b == STATE_IDLE && bram_state1 == STATE_IDLE) begin
+                        bram_state0b <= STATE_INPUT_SET;
+                    end 
+                    else begin
+                        bram_state0a <= STATE_IDLE;
+                    end
 
                     // BRAM 0 Port b Datas
                     bram_addr0b         <= 9'h1ff; // NULL Address
@@ -211,20 +225,47 @@ module student_fc_controller(
 
                     // BRAM 0 Port b FSM Control Signals
                     bram_latency0b      <= 2'b0;
-                    bram_counter0b      <= 8'b0;
-                    bram_write_done0b   <= 1'b0;
+                    bram_counter0b      <= 16'b0;
                     input_set_done      <= 1'b0;
+
+                    // Global Data
+                    input_feature       <= 32'b0;
+                    input_cnt           <= 16'b0;
+                    output_cnt          <= 16'b0;
                 end
                 STATE_INPUT_SET: begin
-                    if (bram_counter0b >= (X_SIZE >> 2)) begin
+                    if ((input_cnt << 2) >= X_SIZE) begin
+                        // BRAM 0 Port b State
+                        if (((output_cnt + 1) << 2) < B_SIZE) begin
+                            bram_state0b <= STATE_BRAM_CHECK;
+                        end
+                        else begin
+                            bram_state0b <= STATE_IDLE;
+                        end
+
+                        // BRAM 0 Port b Datas
+                        bram_addr0b      <= 9'h1ff;
+
+                        // BRAM 0 Port b Control Signals
+                        bram_en0b        <= 1'b0;
+
+                        // BRAM 0 Port b FSM Control Signals
+                        bram_latency0b   <= 2'b0;
+                        bram_counter0b   <= 16'b0;
+                        input_set_done   <= 1'b0;
+
+                        // Global Data
+                        input_feature    <= 32'b0;
+                        input_cnt        <= 16'b0;
+                        output_cnt       <= output_cnt + 1'b1;
                     end
                     else begin
                         // BRAM 0 Port b State
                         bram_state0b    <= STATE_INPUT_SET;
                         
                         // BRAM 0 Port b Datas
-                        if (bram_counter0b < (X_SIZE >> 2)) begin
-                            bram_addr0b <= INPUT0_
+                        if ((bram_counter0b << 2) < X_SIZE) begin
+                            bram_addr0b <= INPUT_START_ADDRESS + bram_counter0b;
                         end 
                         // input_feature
 
@@ -234,13 +275,49 @@ module student_fc_controller(
                         // BRAM 0 Port b FSM Control Signals
                         if (bram_latency0b < MEM_LATENCY + 1) begin
                             bram_latency0b <= bram_latency0b + 1'b1;
+                            input_set_done <= 1'b0;
+
+                            // Global Data
+                            input_cnt <= input_cnt;
                         end else begin
-                            input_feature 
+                            input_feature <= bram_dout0b;
+                            input_set_done <= 1'b1;
+
+                            // Global Data
+                            input_cnt <= input_cnt + 1'b1;
                         end
 
                         bram_counter0b <= bram_counter0b + 1'b1;
 
+                        // Global Data
+                        output_cnt <= output_cnt;
                     end
+                end
+
+                STATE_BRAM_CHECK: begin
+                    // BRAM 0 Port b State
+                    if (bram_state0b == STATE_BRAM_CHECK && bram_state1 == STATE_BRAM_CHECK) begin
+                        bram_state0b    <= STATE_INPUT_SET;
+                    end 
+                    else begin
+                        bram_state0a    <= STATE_BRAM_CHECK;
+                    end
+
+                    // BRAM 0 Port b Datas
+                    bram_addr0b         <= 9'h1ff; // NULL Address
+                    
+                    // BRAM 0 Port b Control Signals
+                    bram_en0b           <= 1'b0;
+
+                    // BRAM 0 Port b FSM Control Signals
+                    bram_latency0b      <= 2'b0;
+                    bram_counter0b      <= 16'b0;
+                    input_set_done      <= 1'b0;
+
+                    // Global Data
+                    input_feature       <= 32'b0;
+                    input_cnt           <= input_cnt;
+                    output_cnt          <= output_cnt;
                 end
             endcase
         end
@@ -261,8 +338,10 @@ module student_fc_controller(
 
     // BRAM 1 FSM Control Signals
     reg  [1:0]  bram_latency1;
-    reg  [7:0]  bram_counter1;
-    reg         bram_write_done1;
+    reg [15:0]  bram_counter1;
+  //reg         bram_write_done1;
+    reg         weight_set_done;
+    reg         bias_set_done;
 
     blk_mem_gen_1 bram1 ( // Single Port BRAM
         clka      (clk),
@@ -288,16 +367,157 @@ module student_fc_controller(
             // BRAM 1 FSM Control Signals
             bram_latency1       <= 2'b0;
             bram_counter1       <= 8'b0;
-            bram_write_done1    <= 1'b0;
+            weight_set_done     <= 1'b0;
+            bias_set_done       <= 1'b0;
+
+            // Global Data
+            weight              <= 32'b0;
+            bias                <= 32'b0;
+            layer               <= 2'b0;
         end
         else begin
             case (bram_state1)
                 STATE_IDLE: begin
-                    bram_state1         <= STATE_IDLE;
+                    // BRAM 1 State
+                    if (r_valid && (layer < STAGE) && bram_state0a == STATE_IDLE && bram_state0b == STATE_IDLE && bram_state1 == STATE_IDLE) begin
+                        bram_state1     <= STATE_WEIGHT_SET;
+                    end 
+                    else begin
+                        bram_state1     <= STATE_IDLE;
+                    end
+
+                    // BRAM 1 Datas
+                    bram_addr1          <= 16'hffff; // NULL Address
+                    
+                    // BRAM 1 Control Signals
+                    bram_en1            <= 1'b0;
+                    bram_we1            <= 1'b0;
+
+                    // BRAM 1 FSM Control Signals
+                    bram_latency1       <= 2'b0;
+                    bram_counter1       <= 8'b0;
+                    weight_set_done     <= 1'b0;
+                    bias_set_done       <= 1'b0;
+
+                    // Global Data
+                    weight              <= 32'b0;
+                    bias                <= 32'b0;
                 end
                 STATE_WEIGHT_SET: begin
+                    if ((input_cnt << 2) >= X_SIZE) begin
+                        // BRAM 1 State
+                        bram_state1     <= STATE_BIAS_SET;
+
+                        // BRAM 1 Datas
+                        bram_addr1      <= 16'hffff;
+
+                        // BRAM 1 Control Signals
+                        bram_en1        <= 1'b0;
+                        bram_we1        <= 1'b0;
+
+                        // BRAM 1 FSM Control Signals
+                        bram_latency1   <= 2'b0;
+                        bram_counter1   <= 16'b0;
+                        weight_set_done <= 1'b0;
+                    end
+                    else begin
+                        // BRAM 1 State
+                        bram_state1     <= STATE_WEIGHT_SET;
+                        
+                        // BRAM 1 Datas
+                        if ((bram_counter1 << 2) < X_SIZE) begin
+                            bram_addr1 <= WEIGHT_START_ADDRESS + output_cnt * (X_SIZE >> 2) + bram_counter1;
+                        end 
+                        // weight
+
+                        // BRAM 1 Control Signals
+                        bram_en1       <= 1'b1;
+                        bram_we1       <= 1'b0;
+
+                        // BRAM 1 FSM Control Signals
+                        if (bram_latency1 < MEM_LATENCY + 1) begin
+                            bram_latency1 <= bram_latency1 + 1'b1;
+                            weight_set_done <= 1'b0;
+                        end else begin
+                            weight <= bram_dout1;
+                            weight_set_done <= 1'b1;
+                        end
+                        bram_counter1 <= bram_counter1 + 1'b1;
+                    end
                 end
                 STATE_BIAS_SET: begin
+                    if (bias_set_done) begin
+                        // BRAM 1 State
+                        if (((output_cnt) << 2) < B_SIZE) begin
+                            bram_state1 <= STATE_BRAM_CHECK;
+                        end
+                        else begin
+                            bram_state1 <= STATE_IDLE;
+                        end
+
+                        if (output_cnt[1:0] == 2'b11) begin
+                            bias_set_done <= 1'b0;
+                        end
+                        else begin
+                            bias_set_done <= 1'b1;
+                        end
+
+                        // BRAM 1 Datas
+                        bram_addr1      <= 16'hffff;
+
+                        // BRAM 1 Control Signals
+                        bram_en1        <= 1'b0;
+                        bram_we1        <= 1'b0;
+
+                        // BRAM 1 FSM Control Signals
+                        bram_latency1   <= 2'b0;
+                        bram_counter1   <= 16'b0;
+                        weight_set_done <= 1'b0;
+                    end
+                    else begin
+                        // BRAM 1 State
+                        bram_state1     <= STATE_BIAS_SET;
+                        
+                        // BRAM 1 Datas
+                        bram_addr1      <= BIAS_START_ADDRESS + (output_cnt >> 2);
+                        // bias
+
+                        // BRAM 1 Control Signals
+                        bram_en1       <= 1'b1;
+                        bram_we1       <= 1'b0;
+
+                        // BRAM 1 FSM Control Signals
+                        if (bram_latency1 < MEM_LATENCY + 1) begin
+                            bram_latency1 <= bram_latency1 + 1'b1;
+                            weight_set_done <= 1'b0;
+                        end else begin
+                            bias <= bram_dout1;
+                            bias_set_done <= 1'b1;
+                        end
+                        weight_set_done <= 1'b0;
+                    end
+                end
+                STATE_BRAM_CHECK: begin
+                    // BRAM 1 State
+                    if (bram_state0b == STATE_BRAM_CHECK && bram_state1 == STATE_BRAM_CHECK) begin
+                        bram_state1     <= STATE_WEIGHT_SET;
+                    end
+                    else begin
+                        bram_state1     <= STATE_BRAM_CHECK;
+                    end
+
+                    // BRAM 1 Datas
+                    bram_addr1          <= 16'hffff;
+
+                    // BRAM 1 Control Signals
+                    bram_en1            <= 1'b0;
+                    bram_we1            <= 1'b0;
+
+                    // BRAM 1 FSM Control Signals
+                    bram_latency1       <= 2'b0;
+                    bram_counter1       <= 16'b0;
+                    bias_set_done       <= bias_set_done;
+                    weight_set_done     <= 1'b0;
                 end
             endcase
         end
@@ -328,21 +548,54 @@ module student_fc_controller(
         .bias_add      (mac_add),
         .flush         (mac_flush),
 
-        .valid         (mac_valid),
+        .valid         (mac_valid[3:0]),
         .input_feature (input_feature[31:0]),
         .weight        (weight[31:0]),
         .bias          (bias[31:0]),
-        .result        (result),
+        .result        (mac_result[25:0]),
         .done          (done)
     );
 
     // MAC Control FSM
     always @(posedge clk or negedge rstn) begin
         if (!rstn) begin
+            // MAC Controller State
+            mac_state   <= STATE_IDLE;
 
+            // MAC Controller State
+            mac_en      <= 1'b0;
+            mac_add     <= 1'b0;
+            mac_flush   <= 1'b0;
+
+            mac_valid   <= 4'b0;
+
+            ReLU        <= 1'b0;
         end
         else begin
-            
+            case (mac_state)
+                STATE_IDLE: begin
+                    // MAC Controller State
+                    if (input_set_done && weight_set_done) begin
+                        mac_state   <= STATE_IDLE;
+                    end
+                    else begin
+                        mac_state   <= STATE_IDLE;
+                    end
+                    
+                    // MAC Controller State
+                    mac_en      <= 1'b0;
+                    mac_add     <= 1'b0;
+                    mac_flush   <= 1'b0;
+
+                    mac_valid   <= 4'b0;
+
+                    ReLU        <= 1'b0;
+                end
+
+                STATE_ACCM: begin
+                    
+                end
+            endcase
         end
     end
 

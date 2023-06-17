@@ -84,7 +84,7 @@ module mac_controller (
         else begin
             if (en) begin
                 if (bias_add) begin
-                    result <= result + bias;
+                    result <= result + (bias << 8);
                     done   <= 1'b1;
                 end
                 else if (mac_done) begin
