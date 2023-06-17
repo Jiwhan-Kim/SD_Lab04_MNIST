@@ -44,7 +44,9 @@ module student_fc_controller(
         STATE_BIAS_SET          = 2'd2,
         STATE_BRAM_CHECK        = 2'd3,
 
-        STATE_ACCM              = 3'd1;
+        STATE_ACCM              = 3'd1,
+        STATE_BIAS_ADD          = 3'd2,
+        STATE_DATA_SEND         = 3'd3;
 
     // Global Data
     reg  [1:0] layer;
@@ -62,6 +64,8 @@ module student_fc_controller(
 
     reg  [15:0] input_cnt;
     reg  [15:0] output_cnt;
+
+    reg   [3:0] data_valid;
 
     always @(*) begin
         case (layer)
@@ -94,7 +98,7 @@ module student_fc_controller(
     // BRAM 0 FSM
     // BRAM 0 State
     reg         bram_state0a;
-    reg [1:0]   bram_state0b;
+    reg   [1:0] bram_state0b;
 
     // BRAM 0 Datas
     reg   [8:0] bram_addr0a; // write
@@ -203,15 +207,13 @@ module student_fc_controller(
 
             // Global Data
             input_feature       <= 32'b0;
-            input_cnt           <= 16'b0;
-            output_cnt          <= 16'b0;
         end
         else begin
             case (bram_state0b)
                 STATE_IDLE: begin
                     // BRAM 0 Port b State
                     if (r_valid && (layer < STAGE) && bram_state0a == STATE_IDLE && bram_state0b == STATE_IDLE && bram_state1 == STATE_IDLE) begin
-                        bram_state0b <= STATE_INPUT_SET;
+                        bram_state0b <= STATE_BRAM_CHECK;
                     end 
                     else begin
                         bram_state0a <= STATE_IDLE;
@@ -230,13 +232,11 @@ module student_fc_controller(
 
                     // Global Data
                     input_feature       <= 32'b0;
-                    input_cnt           <= 16'b0;
-                    output_cnt          <= 16'b0;
                 end
                 STATE_INPUT_SET: begin
                     if ((input_cnt << 2) >= X_SIZE) begin
                         // BRAM 0 Port b State
-                        if (((output_cnt + 1) << 2) < B_SIZE) begin
+                        if ((output_cnt + 1) < B_SIZE) begin
                             bram_state0b <= STATE_BRAM_CHECK;
                         end
                         else begin
@@ -256,8 +256,6 @@ module student_fc_controller(
 
                         // Global Data
                         input_feature    <= 32'b0;
-                        input_cnt        <= 16'b0;
-                        output_cnt       <= output_cnt + 1'b1;
                     end
                     else begin
                         // BRAM 0 Port b State
@@ -276,27 +274,18 @@ module student_fc_controller(
                         if (bram_latency0b < MEM_LATENCY + 1) begin
                             bram_latency0b <= bram_latency0b + 1'b1;
                             input_set_done <= 1'b0;
-
-                            // Global Data
-                            input_cnt <= input_cnt;
                         end else begin
                             input_feature <= bram_dout0b;
                             input_set_done <= 1'b1;
-
-                            // Global Data
-                            input_cnt <= input_cnt + 1'b1;
                         end
 
                         bram_counter0b <= bram_counter0b + 1'b1;
-
-                        // Global Data
-                        output_cnt <= output_cnt;
                     end
                 end
 
                 STATE_BRAM_CHECK: begin
                     // BRAM 0 Port b State
-                    if (bram_state0b == STATE_BRAM_CHECK && bram_state1 == STATE_BRAM_CHECK) begin
+                    if (mac_state == STATE_IDLE && bram_state1 == STATE_BRAM_CHECK) begin
                         bram_state0b    <= STATE_INPUT_SET;
                     end 
                     else begin
@@ -316,8 +305,6 @@ module student_fc_controller(
 
                     // Global Data
                     input_feature       <= 32'b0;
-                    input_cnt           <= input_cnt;
-                    output_cnt          <= output_cnt;
                 end
             endcase
         end
@@ -351,7 +338,8 @@ module student_fc_controller(
         dina      (bram_din1),
         douta     (bram_dout1)
     );
-    
+
+    // BRAM 1 FSM: Mainly Read Data
     always @(posedge clk or negedge rstn) begin
         if (!rstn) begin
             // BRAM 1 State
@@ -373,14 +361,16 @@ module student_fc_controller(
             // Global Data
             weight              <= 32'b0;
             bias                <= 32'b0;
-            layer               <= 2'b0;
+            input_cnt           <= 16'b0;
+            output_cnt          <= 16'b0;
+            data_valid          <= 4'b0;
         end
         else begin
             case (bram_state1)
                 STATE_IDLE: begin
                     // BRAM 1 State
                     if (r_valid && (layer < STAGE) && bram_state0a == STATE_IDLE && bram_state0b == STATE_IDLE && bram_state1 == STATE_IDLE) begin
-                        bram_state1     <= STATE_WEIGHT_SET;
+                        bram_state1     <= STATE_BRAM_CHECK;
                     end 
                     else begin
                         bram_state1     <= STATE_IDLE;
@@ -402,6 +392,9 @@ module student_fc_controller(
                     // Global Data
                     weight              <= 32'b0;
                     bias                <= 32'b0;
+                    input_cnt           <= 16'b0;
+                    output_cnt          <= 16'b0;
+                    data_valid          <= 4'b0;
                 end
                 STATE_WEIGHT_SET: begin
                     if ((input_cnt << 2) >= X_SIZE) begin
@@ -419,6 +412,12 @@ module student_fc_controller(
                         bram_latency1   <= 2'b0;
                         bram_counter1   <= 16'b0;
                         weight_set_done <= 1'b0;
+                        bias_set_done   <= bias_set_done;
+
+                        // Global Data
+                        input_cnt       <= 16'b0;
+                        output_cnt      <= output_cnt;
+                        data_valid      <= (4'b1000 >> output_cnt[1:0]);
                     end
                     else begin
                         // BRAM 1 State
@@ -436,19 +435,30 @@ module student_fc_controller(
 
                         // BRAM 1 FSM Control Signals
                         if (bram_latency1 < MEM_LATENCY + 1) begin
-                            bram_latency1 <= bram_latency1 + 1'b1;
+                            bram_latency1   <= bram_latency1 + 1'b1;
                             weight_set_done <= 1'b0;
+
+                            // Global Data
+                            input_cnt       <= input_cnt;
+                            data_valid      <= 4'b0;
                         end else begin
                             weight <= bram_dout1;
                             weight_set_done <= 1'b1;
+                            
+                            // Global Data
+                            input_cnt       <= input_cnt + 1'b1;
+                            data_valid      <= 4'b1111 << ((X_SIZE - (input_cnt << 2)) >= 16'h4 ? 16'h0 : (16'h4 - (X_SIZE - (input_cnt << 2))));
                         end
                         bram_counter1 <= bram_counter1 + 1'b1;
+
+                        // Global Data
+                        output_cnt <= output_cnt;
                     end
                 end
                 STATE_BIAS_SET: begin
                     if (bias_set_done) begin
                         // BRAM 1 State
-                        if (((output_cnt) << 2) < B_SIZE) begin
+                        if ((output_cnt + 1) < B_SIZE) begin
                             bram_state1 <= STATE_BRAM_CHECK;
                         end
                         else begin
@@ -473,6 +483,11 @@ module student_fc_controller(
                         bram_latency1   <= 2'b0;
                         bram_counter1   <= 16'b0;
                         weight_set_done <= 1'b0;
+
+                        // Global Data
+                        input_cnt           <= input_cnt;
+                        output_cnt          <= output_cnt + 1'b1;
+                        data_valid          <= data_valid;
                     end
                     else begin
                         // BRAM 1 State
@@ -495,11 +510,16 @@ module student_fc_controller(
                             bias_set_done <= 1'b1;
                         end
                         weight_set_done <= 1'b0;
+                        
+                        // Global Data
+                        input_cnt <= input_cnt;
+                        output_cnt <= output_cnt;
+                        data_valid <= (4'b1000 >> output_cnt[1:0]);
                     end
                 end
                 STATE_BRAM_CHECK: begin
                     // BRAM 1 State
-                    if (bram_state0b == STATE_BRAM_CHECK && bram_state1 == STATE_BRAM_CHECK) begin
+                    if (mac_state == STATE_IDLE && bram_state0b == STATE_BRAM_CHECK) begin
                         bram_state1     <= STATE_WEIGHT_SET;
                     end
                     else begin
@@ -518,6 +538,11 @@ module student_fc_controller(
                     bram_counter1       <= 16'b0;
                     bias_set_done       <= bias_set_done;
                     weight_set_done     <= 1'b0;
+
+                    // Global Data
+                    input_cnt           <= input_cnt;
+                    output_cnt          <= output_cnt;
+                    data_valid          <= 4'b0000;
                 end
             endcase
         end
@@ -531,15 +556,16 @@ module student_fc_controller(
     wire signed [25:0] mac_result;
     wire         [7:0] mac_result_q;
 
-    // MAC Controller State
+    // MAC Control Signal
     reg                mac_en;
     reg                mac_add;
     reg                mac_flush;
 
-    reg          [3:0] mac_valid;
+    wire         [3:0] mac_valid;
 
     reg                ReLU;
 
+    assign mac_valid = data_valid;
 
     mac_controller controller(
         .clk           (clk),
@@ -562,12 +588,10 @@ module student_fc_controller(
             // MAC Controller State
             mac_state   <= STATE_IDLE;
 
-            // MAC Controller State
+            // MAC Control Signal
             mac_en      <= 1'b0;
             mac_add     <= 1'b0;
             mac_flush   <= 1'b0;
-
-            mac_valid   <= 4'b0;
 
             ReLU        <= 1'b0;
         end
@@ -575,25 +599,47 @@ module student_fc_controller(
             case (mac_state)
                 STATE_IDLE: begin
                     // MAC Controller State
-                    if (input_set_done && weight_set_done) begin
-                        mac_state   <= STATE_IDLE;
+                    if (bram_state1 == STATE_BRAM_CHECK) begin
+                        mac_state   <= STATE_ACCM;
                     end
                     else begin
                         mac_state   <= STATE_IDLE;
                     end
                     
-                    // MAC Controller State
+                    // MAC Control Signal
                     mac_en      <= 1'b0;
                     mac_add     <= 1'b0;
                     mac_flush   <= 1'b0;
-
-                    mac_valid   <= 4'b0;
 
                     ReLU        <= 1'b0;
                 end
 
                 STATE_ACCM: begin
+                    if ((input_cnt << 2) >= X_SIZE) begin
+                        mac_state <= STATE_BIAS_ADD;
+                    end
+                    else begin
+                        mac_state <= STATE_ACCM;
+                    end
+                    // MAC Control Signal
+                    mac_en      <= 1'b1;
+                    mac_add     <= 1'b0;
+                    mac_flush   <= 1'b0;
+
+                    ReLU        <= 1'b0;
+                end
+
+                STATE_BIAS_ADD: begin
                     
+                    // MAC Control Signal
+                    mac_en      <= 1'b1;
+                    mac_add     <= 1'b1;
+                    mac_flush   <= 1'b0;
+
+                    ReLU        <= 1'b0;
+                end
+
+                STATE_DATA_SEND: begin
                 end
             endcase
         end

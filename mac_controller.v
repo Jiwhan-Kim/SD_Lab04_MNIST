@@ -25,7 +25,7 @@ module mac_controller (
     wire signed [15:0] mac_result2;
     wire signed [15:0] mac_result3;
 
-    assign mac_en[3:0] = valid[3:0];
+    assign mac_en[3:0] = en ? valid[3:0] : 4'b0;
     assign mac_result  =   (mac_done[0] ? mac_result0[15:0] : 16'b0)
                          + (mac_done[1] ? mac_result1[15:0] : 16'b0)
                          + (mac_done[2] ? mac_result2[15:0] : 16'b0)

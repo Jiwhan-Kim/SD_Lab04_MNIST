@@ -63,7 +63,7 @@ module mac (
             end
             else begin
                 // Output Data
-                result <= 16'b0;
+                result <= result;
 
                 // Output Signal
                 done   <= 1'b0;
