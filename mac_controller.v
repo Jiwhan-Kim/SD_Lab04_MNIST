@@ -102,14 +102,19 @@ module mac_controller (
         if (!rstn) begin
             out_result <= 26'b0;
             done   <= 1'b0;
+            
+            result_buffer0 <= 26'b0;
+            result_buffer1 <= 26'b0;
+            result_buffer2 <= 26'b0;
+            result_buffer3 <= 26'b0;
         end
         else begin
             if (en) begin
                 if (bias_add) begin
-                    result_buffer0 <= mac_result0 + (bias0 << 8);
-                    result_buffer1 <= mac_result1 + (bias1 << 8);
-                    result_buffer2 <= mac_result2 + (bias2 << 8);
-                    result_buffer3 <= mac_result3 + (bias3 << 8);
+                    result_buffer0 <= result0 + (bias0 << 8);
+                    result_buffer1 <= result1 + (bias1 << 8);
+                    result_buffer2 <= result2 + (bias2 << 8);
+                    result_buffer3 <= result3 + (bias3 << 8);
 
                     out_result <= out_result;
                     done   <= 1'b1;

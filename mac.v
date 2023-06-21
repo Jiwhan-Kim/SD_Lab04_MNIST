@@ -16,7 +16,7 @@ module mac (
     reg              en_buffer;
 
     // Data
-    reg        [7:0] input_feature_buffer;
+    reg signed [8:0] input_feature_buffer;
     reg signed [7:0] weight_buffer;
 
     // Pipeline Stage 0
@@ -26,7 +26,7 @@ module mac (
             en_buffer <= 1'b0;
 
             // Data
-            input_feature_buffer     <= 8'b0;
+            input_feature_buffer     <= 9'b0;
             weight_buffer            <= 8'b0;
         end
         else begin

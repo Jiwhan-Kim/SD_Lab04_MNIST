@@ -47,7 +47,8 @@ module student_fc_controller(
         STATE_ACCM              = 3'd1,
         STATE_BUFFER            = 3'd2,
         STATE_BIAS_ADD          = 3'd3,
-        STATE_DATA_SEND         = 3'd4;
+        STATE_WAIT              = 3'd4,
+        STATE_DATA_SEND         = 3'd5;
 
     // Global Data
     reg   [1:0] layer;
@@ -55,10 +56,10 @@ module student_fc_controller(
     reg  [31:0] bias;
     reg  [31:0] weight;
 
-    reg  [25:0] output_result0;
-    reg  [25:0] output_result1;
-    reg  [25:0] output_result2;
-    reg  [25:0] output_result3;
+    reg [25:0] output_result0;
+    reg [25:0] output_result1;
+    reg [25:0] output_result2;
+    reg [25:0] output_result3;
 
     wire [31:0] quad_result;
     
@@ -94,7 +95,7 @@ module student_fc_controller(
                 INPUT_START_ADDRESS  <= INPUT1_START_ADDRESS;
                 WEIGHT_START_ADDRESS <= WEIGHT1_START_ADDRESS;
                 BIAS_START_ADDRESS   <= BIAS1_START_ADDRESS;
-                OUTPUT_START_ADDRESS <= 9'b0;
+                OUTPUT_START_ADDRESS <= INPUT1_START_ADDRESS;
 
                 X_SIZE               <= X_SIZE_1;
                 W_SIZE               <= W_SIZE_1;
@@ -173,7 +174,7 @@ module student_fc_controller(
             case (bram_state0a)
                 STATE_IDLE: begin
                     // BRAM 0 Port a State
-                    if (r_valid && ((layer + 1'b1) < STAGE) && (output_cnt <= B_SIZE)) begin
+                    if (r_valid && ((layer + 1'b1) < STAGE) && (output_cnt < B_SIZE)) begin
                         bram_state0a <= STATE_OUT_RECEIVE;
                     end 
                     else begin
@@ -339,6 +340,7 @@ module student_fc_controller(
                             bram_latency0b <= bram_latency0b + 1'b1;
                             input_set_done <= 1'b0;
                         end else begin
+                            $display("%d %d %h %h", output_cnt, input_cnt, bram_addr0b, bram_dout0b);
                             input_feature <= bram_dout0b;
                             input_set_done <= 1'b1;
                         end
@@ -677,10 +679,10 @@ module student_fc_controller(
         .weight        (weight[31:0]),
         .bias          (bias[31:0]),
 
-        .result0       (output_result0),
-        .result1       (output_result1),
-        .result2       (output_result2),
-        .result3       (output_result3),
+        .result0       (output_result0[25:0]),
+        .result1       (output_result1[25:0]),
+        .result2       (output_result2[25:0]),
+        .result3       (output_result3[25:0]),
 
         .out_result    (mac_result[25:0]),
         .out_data      (quad_result[31:0]),
@@ -759,7 +761,7 @@ module student_fc_controller(
                             2'b11: output_result2 <= mac_result;
                             2'b00: output_result3 <= mac_result;
                         endcase
-                        
+
                         if (output_cnt[1:0] == 2'b00 || (output_cnt >= B_SIZE)) begin
                             // MAC Controller State
                             mac_state <= STATE_BIAS_ADD;
@@ -787,7 +789,7 @@ module student_fc_controller(
                 STATE_BIAS_ADD: begin
                     if (bias_set_done) begin
                         // MAC Controller State
-                        mac_state <= STATE_DATA_SEND;
+                        mac_state <= STATE_WAIT;
 
                         // MAC Control Signal
                         mac_en      <= 1'b1;
@@ -809,11 +811,10 @@ module student_fc_controller(
                     end
                 end
 
-
-                STATE_DATA_SEND: begin
+                STATE_WAIT: begin
                     if (!done) begin
                         // MAC Controller State
-                        mac_state <= STATE_DATA_SEND;
+                        mac_state <= STATE_WAIT;
 
                         // MAC Control Signal
                         mac_en      <= 1'b1;
@@ -824,31 +825,43 @@ module student_fc_controller(
                     end
                     else begin
                         // MAC Controller State
-                        mac_state <= STATE_IDLE;
+                        mac_state <= STATE_DATA_SEND;
                         
-                        if (layer + 1'b1 < STAGE) begin // Store on BRAM
-                            // MAC Control Signals
-                            mac_en      <= 1'b1;
-                            mac_add     <= 1'b0;
-                            mac_flush   <= 1'b0;
-                            
-                            ReLU        <= (layer + 1'b1 < STAGE);
+                        // MAC Control Signal
+                        mac_en      <= 1'b1;
+                        mac_add     <= 1'b0;
+                        mac_flush   <= 1'b0;
+
+                        ReLU        <= (layer + 1'b1 < STAGE);
+                    end
+                end
+                
+                STATE_DATA_SEND: begin
+                    // MAC Controller State
+                    mac_state <= STATE_IDLE;
+                    
+                    if (layer + 1'b1 < STAGE) begin // Store on BRAM
+                        // MAC Control Signals
+                        mac_en      <= 1'b1;
+                        mac_add     <= 1'b0;
+                        mac_flush   <= 1'b0;
+                        
+                        ReLU        <= (layer + 1'b1 < STAGE);
+                    end
+                    else begin // Compare and search max
+                        if (temp_max_value >= max_value) begin
+                            max_value <= temp_max_value;
+                            if      (temp0 == temp_max_value) out_data <= output_cnt + output_cnt[1:0] - 4'h4;
+                            else if (temp1 == temp_max_value) out_data <= output_cnt + output_cnt[1:0] - 4'h3;
+                            else if (temp2 == temp_max_value) out_data <= output_cnt + output_cnt[1:0] - 4'h2;
+                            else                              out_data <= output_cnt + output_cnt[1:0] - 4'h1;
                         end
-                        else begin // Compare and search max
-                            if (temp_max_value >= max_value) begin
-                                max_value <= temp_max_value;
-                                if      (temp0 == temp_max_value) out_data <= output_cnt - 4'h4;
-                                else if (temp1 == temp_max_value) out_data <= output_cnt - 4'h3;
-                                else if (temp2 == temp_max_value) out_data <= output_cnt - 4'h2;
-                                else                              out_data <= output_cnt - 4'h1;
-                            end
-                            // MAC Control Signals
-                            mac_en      <= 1'b1;
-                            mac_add     <= 1'b0;
-                            mac_flush   <= 1'b0;
-                            
-                            ReLU        <= (layer + 1'b1 < STAGE);
-                        end
+                        // MAC Control Signals
+                        mac_en      <= 1'b1;
+                        mac_add     <= 1'b0;
+                        mac_flush   <= 1'b0;
+                        
+                        ReLU        <= (layer + 1'b1 < STAGE);
                     end
                 end
             endcase
