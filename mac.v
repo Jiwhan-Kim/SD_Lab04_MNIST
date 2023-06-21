@@ -13,11 +13,11 @@ module mac (
     output wire              done
 );
     // Control Signal
-    wire              en_buffer;
+    reg              en_buffer;
 
     // Data
-    wire        [7:0] input_feature_buffer;
-    wire signed [7:0] weight_buffer;
+    reg        [7:0] input_feature_buffer;
+    reg signed [7:0] weight_buffer;
 
     // Pipeline Stage 0
     always @(posedge clk or negedge rstn) begin

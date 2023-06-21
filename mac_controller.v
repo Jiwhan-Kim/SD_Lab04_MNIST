@@ -13,13 +13,13 @@ module mac_controller (
     input wire        [31:0] weight,
     input wire        [31:0] bias,
 
-    input wire        [25:0] result0,
-    input wire        [25:0] result1,
-    input wire        [25:0] result2,
-    input wire        [25:0] result3,
+    input wire signed [25:0] result0,
+    input wire signed [25:0] result1,
+    input wire signed [25:0] result2,
+    input wire signed [25:0] result3,
 
     output reg signed [25:0] out_result,
-    output wire       [31:0] out_data;
+    output wire       [31:0] out_data,
     output reg               done
 );
     wire         [3:0] mac_en;
@@ -82,8 +82,6 @@ module mac_controller (
         .result        (mac_result3[15:0]),
         .done          (mac_done[3])
     );
-
-    wire         [7:0] mac_result_q;
 
     wire signed  [7:0] bias0;
     wire signed  [7:0] bias1;
