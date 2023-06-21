@@ -10,7 +10,7 @@ module mac (
     input wire signed  [7:0] weight,
 
     output reg signed [15:0] result,
-    output wire              done
+    output reg               done
 );
     // Control Signal
     reg              en_buffer;

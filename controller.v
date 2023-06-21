@@ -173,7 +173,7 @@ module student_fc_controller(
             case (bram_state0a)
                 STATE_IDLE: begin
                     // BRAM 0 Port a State
-                    if (r_valid && (layer + 1'b1 < STAGE)) begin
+                    if (r_valid && ((layer + 1'b1) < STAGE) && (output_cnt <= B_SIZE)) begin
                         bram_state0a <= STATE_OUT_RECEIVE;
                     end 
                     else begin
@@ -217,12 +217,7 @@ module student_fc_controller(
                             bram_state0a    <= STATE_OUT_RECEIVE;
                             
                             // BRAM 0 Port a Datas
-                            if (bram_counter0a == 0) begin
-                                bram_addr0a <= OUTPUT_START_ADDRESS;
-                            end
-                            else begin
-                                bram_addr0a <= bram_addr0a + 1'b1;
-                            end
+                            bram_addr0a <= OUTPUT_START_ADDRESS + (output_cnt >> 2) - 9'b1;
                             bram_din0a[31:0] <= quad_result[31:0];
 
                             // BRAM 0 Port a Control Signals
@@ -231,7 +226,7 @@ module student_fc_controller(
 
                             // BRAM 0 Port a FSM Control Signals
                             bram_latency0a <= 2'b0;
-                            bram_counter0a <= bram_counter0a + 8'b1;
+                            bram_counter0a <= 8'b0;
                             bram_write_done0a <= 1'b1;
                         end
                         else begin
@@ -358,7 +353,7 @@ module student_fc_controller(
                         bram_state0b    <= STATE_INPUT_SET;
                     end 
                     else begin
-                        bram_state0a    <= STATE_BRAM_CHECK;
+                        bram_state0b    <= STATE_BRAM_CHECK;
                     end
 
                     // BRAM 0 Port b Datas
@@ -400,12 +395,12 @@ module student_fc_controller(
     reg         bias_set_done;
 
     blk_mem_gen_1 bram1 ( // Single Port BRAM
-        clka      (clk),
-        ena       (bram_en1),
-        wea       (bram_we1),
-        addra     (bram_addr1),
-        dina      (bram_din1),
-        douta     (bram_dout1)
+        .clka      (clk),
+        .ena       (bram_en1),
+        .wea       (bram_we1),
+        .addra     (bram_addr1),
+        .dina      (bram_din1),
+        .douta     (bram_dout1)
     );
 
     // BRAM 1 FSM: Mainly Read Data
@@ -439,12 +434,27 @@ module student_fc_controller(
             case (bram_state1)
                 STATE_IDLE: begin
                     // BRAM 1 State
-                    if (r_valid && (layer < STAGE)) begin
+                    if (r_valid && mac_state == STATE_IDLE && (layer < STAGE)) begin
+                        t_valid <= 1'b0;
                         bram_state1     <= STATE_BRAM_CHECK;
+                        
+                        input_cnt           <= 16'b0;
+                        output_cnt          <= 16'b0;
                     end 
                     else if (layer >= STAGE) begin
                         t_valid <= 1'b1;
                         bram_state1     <= STATE_IDLE;
+                        
+                        input_cnt           <= input_cnt;
+                        output_cnt          <= output_cnt;
+                    end
+                    else begin
+                        t_valid <= 1'b0;
+                        bram_state1     <= STATE_IDLE;
+                        
+                                    
+                        input_cnt           <= input_cnt;
+                        output_cnt          <= output_cnt;
                     end
 
                     // BRAM 1 Datas
@@ -463,8 +473,6 @@ module student_fc_controller(
                     // Global Data
                     weight              <= 32'b0;
                     bias                <= 32'b0;
-                    input_cnt           <= 16'b0;
-                    output_cnt          <= 16'b0;
                     data_valid          <= 4'b0;
                     layer               <= layer;
                 end
@@ -628,10 +636,10 @@ module student_fc_controller(
                         weight_set_done <= 1'b0;
                         
                         // Global Data
-                        input_cnt <= input_cnt;
+                        input_cnt  <= input_cnt;
                         output_cnt <= output_cnt;
                         data_valid <= data_valid;
-                        layer     <= layer;
+                        layer      <= layer;
                     end
                 end
             endcase
@@ -751,7 +759,7 @@ module student_fc_controller(
                             2'b11: output_result2 <= mac_result;
                             2'b00: output_result3 <= mac_result;
                         endcase
-
+                        
                         if (output_cnt[1:0] == 2'b00 || (output_cnt >= B_SIZE)) begin
                             // MAC Controller State
                             mac_state <= STATE_BIAS_ADD;
@@ -817,7 +825,7 @@ module student_fc_controller(
                     else begin
                         // MAC Controller State
                         mac_state <= STATE_IDLE;
-
+                        
                         if (layer + 1'b1 < STAGE) begin // Store on BRAM
                             // MAC Control Signals
                             mac_en      <= 1'b1;
@@ -865,5 +873,5 @@ module student_fc_controller(
 
     wire signed [7:0] temp_max_value;
 
-    assign temp_max_value = temp_left >= temp__right ? temp_left : temp_right;
+    assign temp_max_value = temp_left >= temp_right ? temp_left : temp_right;
 endmodule
