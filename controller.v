@@ -340,7 +340,6 @@ module student_fc_controller(
                             bram_latency0b <= bram_latency0b + 1'b1;
                             input_set_done <= 1'b0;
                         end else begin
-                            $display("%d %d %h %h", output_cnt, input_cnt, bram_addr0b, bram_dout0b);
                             input_feature <= bram_dout0b;
                             input_set_done <= 1'b1;
                         end
@@ -853,13 +852,13 @@ module student_fc_controller(
                         ReLU        <= (layer < STAGE);
                     end
                     else begin // Compare and search max
-                        $display("%h %h %h %h", quad_result[31:24], quad_result[23:16], quad_result[15:8], quad_result[7:0]);
+                        // $display("%h %h %h %h", quad_result[31:24], quad_result[23:16], quad_result[15:8], quad_result[7:0]);
                         if (temp_max_value >= max_value) begin
                             max_value <= temp_max_value;
-                            if      (temp0 == temp_max_value) out_data <= output_cnt + (output_cnt[1:0] == 2'b00 ? 4'h0 : 4'h2) - 4'h4;
-                            else if (temp1 == temp_max_value) out_data <= output_cnt + output_cnt[1:0] - 4'h3;
-                            else if (temp2 == temp_max_value) out_data <= output_cnt + output_cnt[1:0] - 4'h2;
-                            else                              out_data <= output_cnt + output_cnt[1:0] - 4'h1;
+                            if      (temp0 == temp_max_value) out_data <= output_cnt + {~output_cnt[1:0] + 1'b1} - 4'h4;
+                            else if (temp1 == temp_max_value) out_data <= output_cnt + {~output_cnt[1:0] + 1'b1} - 4'h3;
+                            else if (temp2 == temp_max_value) out_data <= output_cnt + {~output_cnt[1:0] + 1'b1} - 4'h2;
+                            else                              out_data <= output_cnt + {~output_cnt[1:0] + 1'b1} - 4'h1;
                         end
                         // MAC Control Signals
                         mac_en      <= 1'b1;

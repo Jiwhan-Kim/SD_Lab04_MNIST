@@ -9,7 +9,7 @@ module mac (
     input wire         [7:0] input_feature,
     input wire signed  [7:0] weight,
 
-    output reg signed [16:0] result,
+    output reg signed [15:0] result,
     output reg               done
 );
     // Control Signal
@@ -38,7 +38,7 @@ module mac (
                 input_feature_buffer <= {1'b0, input_feature};
                 weight_buffer        <= weight;
             end else begin
-                input_feature_buffer <= 9'b0;
+                input_feature_buffer <= 8'b0;
                 weight_buffer        <= 8'b0;
             end
         end
@@ -62,7 +62,7 @@ module mac (
             end
             else begin
                 // Output Data
-                result <= 17'b0;
+                result <= 16'b0;
 
                 // Output Signal
                 done   <= 1'b0;
