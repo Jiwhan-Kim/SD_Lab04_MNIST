@@ -34,7 +34,7 @@ module student_fc_controller(
         WEIGHT0_START_ADDRESS   = 16'h0,
         BIAS0_START_ADDRESS     = 16'he5b0, // 16'd58800 = (16'd784 * 16'd300) >> 2
         WEIGHT1_START_ADDRESS   = 16'he5fb, // 16'd58875 = (16'd784 * 16'd300 + 16'd300) >> 2
-        BIAS1_START_ADDRESS     = 16'he8e9, // 16'd59625 = (16'd300 * 16'd784 + 16'd300 + 16'd10 * 16'd300) >> 2
+        BIAS1_START_ADDRESS     = 16'he8e9, // 16'd59625 = (16'd300 * 16'd784 + 16'd300 + 16'd300 * 16'd10) >> 2
 
         // BRAM States
         STATE_IDLE              =  'd0,
@@ -623,7 +623,7 @@ module student_fc_controller(
                         bram_state1     <= STATE_BIAS_SET;
                         
                         // BRAM 1 Datas
-                        bram_addr1      <= BIAS_START_ADDRESS + (output_cnt >> 2);
+                        bram_addr1      <= BIAS_START_ADDRESS + ((output_cnt - 1) >> 2);
                         // bias
 
                         // BRAM 1 Control Signals
@@ -852,7 +852,10 @@ module student_fc_controller(
                         ReLU        <= (layer < STAGE);
                     end
                     else begin // Compare and search max
-                        // $display("%h %h %h %h", quad_result[31:24], quad_result[23:16], quad_result[15:8], quad_result[7:0]);
+                        $display("%d: %h", output_cnt + {~output_cnt[1:0] + 1'b1} - 4'h4, temp0[7:0]);
+                        $display("%d: %h", output_cnt + {~output_cnt[1:0] + 1'b1} - 4'h3, temp1[7:0]);
+                        $display("%d: %h", output_cnt + {~output_cnt[1:0] + 1'b1} - 4'h2, temp2[7:0]);
+                        $display("%d: %h", output_cnt + {~output_cnt[1:0] + 1'b1} - 4'h1, temp3[7:0]);
                         if (temp_max_value >= max_value) begin
                             max_value <= temp_max_value;
                             if      (temp0 == temp_max_value) out_data <= output_cnt + {~output_cnt[1:0] + 1'b1} - 4'h4;
@@ -877,10 +880,10 @@ module student_fc_controller(
     wire signed [7:0] temp2;
     wire signed [7:0] temp3;
 
-    assign temp0 = quad_result[31:24];
-    assign temp1 = quad_result[23:16];
-    assign temp2 = quad_result[15:8];
-    assign temp3 = quad_result[7:0];
+    assign temp0 = 2'h3 >= output_cnt[1:0] ? quad_result[31:24] : 8'h80;
+    assign temp1 = 2'h2 >= output_cnt[1:0] ? quad_result[23:16] : 8'h80;
+    assign temp2 = 2'h1 >= output_cnt[1:0] ? quad_result[15:8] : 8'h80;
+    assign temp3 = 2'h0 >= output_cnt[1:0] ? quad_result[7:0] : 8'h80;
 
     wire signed [7:0] temp_left; 
     wire signed [7:0] temp_right;

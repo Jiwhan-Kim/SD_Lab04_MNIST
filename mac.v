@@ -38,7 +38,7 @@ module mac (
                 input_feature_buffer <= {1'b0, input_feature};
                 weight_buffer        <= weight;
             end else begin
-                input_feature_buffer <= 8'b0;
+                input_feature_buffer <= 9'b0;
                 weight_buffer        <= 8'b0;
             end
         end
