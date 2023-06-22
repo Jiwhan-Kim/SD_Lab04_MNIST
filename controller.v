@@ -56,10 +56,10 @@ module student_fc_controller(
     reg  [31:0] bias;
     reg  [31:0] weight;
 
-    reg [25:0] output_result0;
-    reg [25:0] output_result1;
-    reg [25:0] output_result2;
-    reg [25:0] output_result3;
+    reg signed [25:0] output_result0;
+    reg signed [25:0] output_result1;
+    reg signed [25:0] output_result2;
+    reg signed [25:0] output_result3;
 
     wire [31:0] quad_result;
     
@@ -81,7 +81,7 @@ module student_fc_controller(
 
     always @(*) begin
         case (layer)
-            2'b00: begin
+            2'b01: begin
                 INPUT_START_ADDRESS  <= INPUT0_START_ADDRESS;
                 WEIGHT_START_ADDRESS <= WEIGHT0_START_ADDRESS;
                 BIAS_START_ADDRESS   <= BIAS0_START_ADDRESS;
@@ -91,7 +91,7 @@ module student_fc_controller(
                 W_SIZE               <= W_SIZE_0;
                 B_SIZE               <= B_SIZE_0;
             end
-            2'b01: begin
+            2'b10: begin
                 INPUT_START_ADDRESS  <= INPUT1_START_ADDRESS;
                 WEIGHT_START_ADDRESS <= WEIGHT1_START_ADDRESS;
                 BIAS_START_ADDRESS   <= BIAS1_START_ADDRESS;
@@ -174,7 +174,7 @@ module student_fc_controller(
             case (bram_state0a)
                 STATE_IDLE: begin
                     // BRAM 0 Port a State
-                    if (r_valid && ((layer + 1'b1) < STAGE) && (output_cnt < B_SIZE)) begin
+                    if (r_valid && (layer < STAGE) && (output_cnt < B_SIZE)) begin
                         bram_state0a <= STATE_OUT_RECEIVE;
                     end 
                     else begin
@@ -277,7 +277,7 @@ module student_fc_controller(
             case (bram_state0b)
                 STATE_IDLE: begin
                     // BRAM 0 Port b State
-                    if (r_valid && (layer < STAGE)) begin
+                    if (r_valid && mac_state == STATE_IDLE && (layer < STAGE)) begin
                         bram_state0b <= STATE_BRAM_CHECK;
                     end 
                     else begin
@@ -440,23 +440,28 @@ module student_fc_controller(
                         t_valid <= 1'b0;
                         bram_state1     <= STATE_BRAM_CHECK;
                         
-                        input_cnt           <= 16'b0;
-                        output_cnt          <= 16'b0;
+                        // Global Data
+                        input_cnt       <= 16'b0;
+                        output_cnt      <= 16'b0;
+                        layer           <= layer + 1'b1;
                     end 
-                    else if (layer >= STAGE) begin
+                    else if (mac_state == STATE_IDLE && layer >= STAGE) begin
                         t_valid <= 1'b1;
                         bram_state1     <= STATE_IDLE;
                         
-                        input_cnt           <= input_cnt;
-                        output_cnt          <= output_cnt;
+                        // Global Data
+                        input_cnt       <= input_cnt;
+                        output_cnt      <= output_cnt;
+                        layer           <= layer;
                     end
                     else begin
                         t_valid <= 1'b0;
                         bram_state1     <= STATE_IDLE;
                         
-                                    
-                        input_cnt           <= input_cnt;
-                        output_cnt          <= output_cnt;
+                        // Global Data
+                        input_cnt       <= input_cnt; 
+                        output_cnt      <= output_cnt;
+                        layer           <= layer;
                     end
 
                     // BRAM 1 Datas
@@ -476,7 +481,6 @@ module student_fc_controller(
                     weight              <= 32'b0;
                     bias                <= 32'b0;
                     data_valid          <= 4'b0;
-                    layer               <= layer;
                 end
 
                 STATE_BRAM_CHECK: begin
@@ -581,12 +585,11 @@ module student_fc_controller(
                             // BRAM 1 State
                             if (output_cnt >= B_SIZE) begin
                                 bram_state1      <= STATE_IDLE;
-                                layer            <= layer + 1'b1;
                             end
                             else begin
                                 bram_state1      <= STATE_BRAM_CHECK;
-                                layer            <= layer;
                             end
+                            
                             // Global Data
                             bias_set_done   <= 1'b0;
                         end
@@ -614,6 +617,7 @@ module student_fc_controller(
                         input_cnt           <= input_cnt;
                         output_cnt          <= output_cnt;
                         data_valid          <= 4'b1111;
+                        layer               <= layer;
                     end
                     else begin
                         // BRAM 1 State
@@ -796,7 +800,7 @@ module student_fc_controller(
                         mac_add     <= 1'b1;
                         mac_flush   <= 1'b0;
 
-                        ReLU        <= (layer + 1'b1 < STAGE);
+                        ReLU        <= (layer < STAGE);
                     end
                     else begin
                         // MAC Controller State
@@ -807,7 +811,7 @@ module student_fc_controller(
                         mac_add     <= 1'b0;
                         mac_flush   <= 1'b0;
                         
-                        ReLU        <= (layer + 1'b1 < STAGE);
+                        ReLU        <= (layer < STAGE);
                     end
                 end
 
@@ -821,7 +825,7 @@ module student_fc_controller(
                         mac_add     <= 1'b0;
                         mac_flush   <= 1'b0;
 
-                        ReLU        <= (layer + 1'b1 < STAGE);
+                        ReLU        <= (layer < STAGE);
                     end
                     else begin
                         // MAC Controller State
@@ -832,7 +836,7 @@ module student_fc_controller(
                         mac_add     <= 1'b0;
                         mac_flush   <= 1'b0;
 
-                        ReLU        <= (layer + 1'b1 < STAGE);
+                        ReLU        <= (layer < STAGE);
                     end
                 end
                 
@@ -840,18 +844,19 @@ module student_fc_controller(
                     // MAC Controller State
                     mac_state <= STATE_IDLE;
                     
-                    if (layer + 1'b1 < STAGE) begin // Store on BRAM
+                    if (layer < STAGE) begin // Store on BRAM
                         // MAC Control Signals
                         mac_en      <= 1'b1;
                         mac_add     <= 1'b0;
                         mac_flush   <= 1'b0;
                         
-                        ReLU        <= (layer + 1'b1 < STAGE);
+                        ReLU        <= (layer < STAGE);
                     end
                     else begin // Compare and search max
+                        $display("%h %h %h %h", quad_result[31:24], quad_result[23:16], quad_result[15:8], quad_result[7:0]);
                         if (temp_max_value >= max_value) begin
                             max_value <= temp_max_value;
-                            if      (temp0 == temp_max_value) out_data <= output_cnt + output_cnt[1:0] - 4'h4;
+                            if      (temp0 == temp_max_value) out_data <= output_cnt + (output_cnt[1:0] == 2'b00 ? 4'h0 : 4'h2) - 4'h4;
                             else if (temp1 == temp_max_value) out_data <= output_cnt + output_cnt[1:0] - 4'h3;
                             else if (temp2 == temp_max_value) out_data <= output_cnt + output_cnt[1:0] - 4'h2;
                             else                              out_data <= output_cnt + output_cnt[1:0] - 4'h1;
@@ -861,7 +866,7 @@ module student_fc_controller(
                         mac_add     <= 1'b0;
                         mac_flush   <= 1'b0;
                         
-                        ReLU        <= (layer + 1'b1 < STAGE);
+                        ReLU        <= (layer < STAGE);
                     end
                 end
             endcase

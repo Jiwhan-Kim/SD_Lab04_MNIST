@@ -25,18 +25,15 @@ module mac_controller (
     wire         [3:0] mac_en;
     wire         [3:0] mac_done;
 
-    wire signed [17:0] mac_result;
+    wire signed [25:0] mac_result;
 
-    wire signed [15:0] mac_result0;
-    wire signed [15:0] mac_result1;
-    wire signed [15:0] mac_result2;
-    wire signed [15:0] mac_result3;
+    wire signed [16:0] mac_result0;
+    wire signed [16:0] mac_result1;
+    wire signed [16:0] mac_result2;
+    wire signed [16:0] mac_result3;
 
     assign mac_en[3:0] = en ? valid[3:0] : 4'b0;
-    assign mac_result  =   (mac_done[0] ? mac_result0[15:0] : 16'b0)
-                         + (mac_done[1] ? mac_result1[15:0] : 16'b0)
-                         + (mac_done[2] ? mac_result2[15:0] : 16'b0)
-                         + (mac_done[3] ? mac_result3[15:0] : 16'b0);
+    assign mac_result  = mac_result0 + mac_result1 + mac_result2 + mac_result3;
 
     mac mac0 (
         .clk           (clk),
@@ -46,7 +43,7 @@ module mac_controller (
         .input_feature (input_feature[7:0]),
         .weight        (weight[7:0]),
 
-        .result        (mac_result0[15:0]),
+        .result        (mac_result0[16:0]),
         .done          (mac_done[0])
     );
     mac mac1 (
@@ -57,7 +54,7 @@ module mac_controller (
         .input_feature (input_feature[15:8]),
         .weight        (weight[15:8]),
 
-        .result        (mac_result1[15:0]),
+        .result        (mac_result1[16:0]),
         .done          (mac_done[1])
     );
     mac mac2 (
@@ -68,7 +65,7 @@ module mac_controller (
         .input_feature (input_feature[23:16]),
         .weight        (weight[23:16]),
 
-        .result        (mac_result2[15:0]),
+        .result        (mac_result2[16:0]),
         .done          (mac_done[2])
     );
     mac mac3 (
@@ -79,7 +76,7 @@ module mac_controller (
         .input_feature (input_feature[31:24]),
         .weight        (weight[31:24]),
 
-        .result        (mac_result3[15:0]),
+        .result        (mac_result3[16:0]),
         .done          (mac_done[3])
     );
 
