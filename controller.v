@@ -1,12 +1,12 @@
 `timescale 1ns / 1ps
 
 module student_fc_controller(
-    input wire  clk,
-    input wire  rstn,
-    input wire  r_valid,
+    input wire       clk,
+    input wire       rstn,
+    input wire       r_valid,
     
     output reg [3:0] out_data,
-    output reg t_valid
+    output reg       t_valid
 );
     localparam
         // Global Constants
@@ -40,6 +40,8 @@ module student_fc_controller(
         STATE_IDLE              =  'd0,
         STATE_OUT_RECEIVE       = 1'd1,
         STATE_INPUT_SET         = 2'd1,
+        STATE_OUTPUT_SET        = 2'd2,
+
         STATE_WEIGHT_SET        = 2'd1,
         STATE_BIAS_SET          = 2'd2,
         STATE_BRAM_CHECK        = 2'd3,
@@ -298,56 +300,7 @@ module student_fc_controller(
                     // Global Data
                     input_feature       <= 32'b0;
                 end
-                STATE_INPUT_SET: begin
-                    if ((input_cnt << 2) >= X_SIZE) begin
-                        // BRAM 0 Port b State
-                        if ((output_cnt + 1) < B_SIZE) begin
-                            bram_state0b <= STATE_BRAM_CHECK;
-                        end
-                        else begin
-                            bram_state0b <= STATE_IDLE;
-                        end
-
-                        // BRAM 0 Port b Datas
-                        bram_addr0b      <= 9'h1ff;
-
-                        // BRAM 0 Port b Control Signals
-                        bram_en0b        <= 1'b0;
-
-                        // BRAM 0 Port b FSM Control Signals
-                        bram_latency0b   <= 2'b0;
-                        bram_counter0b   <= 16'b0;
-                        input_set_done   <= 1'b0;
-
-                        // Global Data
-                        input_feature    <= 32'b0;
-                    end
-                    else begin
-                        // BRAM 0 Port b State
-                        bram_state0b    <= STATE_INPUT_SET;
-                        
-                        // BRAM 0 Port b Datas
-                        if ((bram_counter0b << 2) < X_SIZE) begin
-                            bram_addr0b <= INPUT_START_ADDRESS + bram_counter0b;
-                        end 
-                        // input_feature
-
-                        // BRAM 0 Port b Control Signals
-                        bram_en0b       <= 1'b1;
-
-                        // BRAM 0 Port b FSM Control Signals
-                        if (bram_latency0b < MEM_LATENCY + 1) begin
-                            bram_latency0b <= bram_latency0b + 1'b1;
-                            input_set_done <= 1'b0;
-                        end else begin
-                            input_feature <= bram_dout0b;
-                            input_set_done <= 1'b1;
-                        end
-
-                        bram_counter0b <= bram_counter0b + 1'b1;
-                    end
-                end
-
+                                
                 STATE_BRAM_CHECK: begin
                     // BRAM 0 Port b State
                     if (mac_state == STATE_IDLE && bram_state1 == STATE_BRAM_CHECK) begin
@@ -371,6 +324,58 @@ module student_fc_controller(
                     // Global Data
                     input_feature       <= 32'b0;
                 end
+
+                STATE_INPUT_SET: begin
+                    if ((input_cnt << 2) >= X_SIZE) begin
+                        // BRAM 0 Port b State
+                        bram_state0b     <= STATE_OUTPUT_SET;
+
+                        // BRAM 0 Port b Datas
+                        bram_addr0b      <= 9'h1ff;
+
+                        // BRAM 0 Port b Control Signals
+                        bram_en0b        <= 1'b0;
+
+                        // BRAM 0 Port b FSM Control Signals
+                        bram_latency0b   <= 2'b0;
+                        bram_counter0b   <= 16'b0;
+                        input_set_done   <= 1'b0;
+
+                        // Global Data
+                        input_feature    <= 32'b0;
+                    end
+                    else begin
+                        // BRAM 0 Port b State
+                        bram_state0b       <= STATE_INPUT_SET;
+                        
+                        // BRAM 0 Port b Datas
+                        bram_addr0b        <= INPUT_START_ADDRESS + bram_counter0b;
+                        // input_feature
+
+                        // BRAM 0 Port b Control Signals
+                        bram_en0b          <= 1'b1;
+
+                        // BRAM 0 Port b FSM Control Signals
+                        if (bram_latency0b < MEM_LATENCY + 1) begin
+                            bram_latency0b <= bram_latency0b + 1'b1;
+                            input_set_done <= 1'b0;
+                        end else begin
+                            input_feature  <= bram_dout0b;
+                            input_set_done <= 1'b1;
+                        end
+
+                        if ((bram_counter0b << 2) < X_SIZE) begin
+                            bram_counter0b <= bram_counter0b + 1'b1;
+                        end
+                        else begin
+                            bram_counter0b <= 16'b0;
+                        end
+                    end
+                end
+
+                STATE_OUTPUT_SET: begin
+                end
+
             endcase
         end
     end
@@ -512,14 +517,9 @@ module student_fc_controller(
                 end
 
                 STATE_WEIGHT_SET: begin
-                    if ((input_cnt << 2) >= X_SIZE) begin
+                    if ((input_cnt << 2) >= W_SIZE) begin
                         // BRAM 1 State
-                        if (output_cnt[1:0] == 2'b11 || (output_cnt + 1'b1 >= B_SIZE)) begin
-                            bram_state1 <= STATE_BIAS_SET;
-                        end
-                        else begin
-                            bram_state1 <= STATE_BRAM_CHECK;
-                        end
+                        bram_state1     <= STATE_BIAS_SET;
                         
                         // BRAM 1 Datas
                         bram_addr1      <= 16'hffff;
@@ -545,14 +545,14 @@ module student_fc_controller(
                         bram_state1     <= STATE_WEIGHT_SET;
                         
                         // BRAM 1 Datas
-                        if ((bram_counter1 << 2) < X_SIZE) begin
-                            bram_addr1 <= WEIGHT_START_ADDRESS + output_cnt * (X_SIZE >> 2) + bram_counter1;
+                        if ((bram_counter1 << 2) < W_SIZE) begin
+                            bram_addr1  <= WEIGHT_START_ADDRESS + output_cnt * (X_SIZE >> 2) + bram_counter1;
                         end 
                         // weight
 
                         // BRAM 1 Control Signals
-                        bram_en1       <= 1'b1;
-                        bram_we1       <= 1'b0;
+                        bram_en1        <= 1'b1;
+                        bram_we1        <= 1'b0;
 
                         // BRAM 1 FSM Control Signals
                         if (bram_latency1 < MEM_LATENCY + 1) begin
@@ -563,7 +563,7 @@ module student_fc_controller(
                             input_cnt       <= input_cnt;
                             data_valid      <= 4'b0;
                         end else begin
-                            weight <= bram_dout1;
+                            weight          <= bram_dout1;
                             weight_set_done <= 1'b1;
                             
                             // Global Data
