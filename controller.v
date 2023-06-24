@@ -6,8 +6,9 @@
     Kim Ji Whan 
     2021189004
 
-    Version - 2.0.3. on 23.06.24. 12:38
+    Version - Beta 3.0.0. on 23.06.24. 12:38
 */
+
 module student_fc_controller(
     input wire  clk,
     input wire  rstn,
@@ -47,10 +48,12 @@ module student_fc_controller(
         // BRAM States
         STATE_IDLE              =  'd0,
         STATE_OUT_RECEIVE       = 1'd1,
-        STATE_INPUT_SET         = 2'd1,
+        STATE_BRAM_CHECK        = 2'd1,
+        STATE_INPUT_SET         = 2'd2,
+        STATE_OUTPUT_SET        = 2'd
+        
         STATE_WEIGHT_SET        = 2'd1,
         STATE_BIAS_SET          = 2'd2,
-        STATE_BRAM_CHECK        = 2'd3,
 
         STATE_ACCM              = 3'd1,
         STATE_BUFFER            = 3'd2,
@@ -351,7 +354,7 @@ module student_fc_controller(
                             input_feature <= bram_dout0b;
                             input_set_done <= 1'b1;
                         end
-
+                        if (bram_counter0b)
                         bram_counter0b <= bram_counter0b + 1'b1;
                     end
                 end
@@ -509,7 +512,7 @@ module student_fc_controller(
                     // BRAM 1 FSM Control Signals
                     bram_latency1       <= 2'b0;
                     bram_counter1       <= 16'b0;
-                    bias_set_done       <= bias_set_done;
+                    bias_set_done       <= 1'b0;
                     weight_set_done     <= 1'b0;
 
                     // Global Data
@@ -520,14 +523,9 @@ module student_fc_controller(
                 end
 
                 STATE_WEIGHT_SET: begin
-                    if ((input_cnt << 2) >= X_SIZE) begin
+                    if ((output_cnt << 2) >= B_SIZE) begin
                         // BRAM 1 State
-                        if (output_cnt[1:0] == 2'b11 || (output_cnt + 1'b1 >= B_SIZE)) begin
-                            bram_state1 <= STATE_BIAS_SET;
-                        end
-                        else begin
-                            bram_state1 <= STATE_BRAM_CHECK;
-                        end
+                        bram_state1     <= STATE_BIAS_SET;
                         
                         // BRAM 1 Datas
                         bram_addr1      <= 16'hffff;
@@ -540,11 +538,11 @@ module student_fc_controller(
                         bram_latency1   <= 2'b0;
                         bram_counter1   <= 16'b0;
                         weight_set_done <= 1'b0;
-                        bias_set_done   <= bias_set_done;
+                        bias_set_done   <= 1'b0;
 
                         // Global Data
                         input_cnt       <= 16'b0;
-                        output_cnt      <= output_cnt + 1'b1;
+                        output_cnt      <= 16'b0;
                         data_valid      <= 4'b0000;
                         layer           <= layer;
                     end
@@ -553,8 +551,8 @@ module student_fc_controller(
                         bram_state1     <= STATE_WEIGHT_SET;
                         
                         // BRAM 1 Datas
-                        if ((bram_counter1 << 2) < X_SIZE) begin
-                            bram_addr1 <= WEIGHT_START_ADDRESS + output_cnt * (X_SIZE >> 2) + bram_counter1;
+                        if ((bram_counter1 << 2) < W_SIZE) begin
+                            bram_addr1 <= WEIGHT_START_ADDRESS + bram_counter1;
                         end 
                         // weight
 
@@ -576,38 +574,23 @@ module student_fc_controller(
                             
                             // Global Data
                             input_cnt       <= input_cnt + 1'b1;
-                            data_valid      <= 4'b1111 << ((X_SIZE - (input_cnt << 2)) >= 16'h4 ? 2'h0 : (3'h4 - (X_SIZE - (input_cnt << 2))));
+                            data_valid      <= 4'b1111;
                         end
                         bram_counter1 <= bram_counter1 + 1'b1;
+                        bias_set_done <= 1'b0;
 
                         // Global Data
-                        output_cnt <= output_cnt;
+                        if (((input_cnt << 2) % X_SIZE) == ((X_SIZE - 1'b1) >> 2)) output_cnt <= output_cnt + 1'b1;
+                        else                                                       output_cnt <= output_cnt;
                         layer      <= layer;
                     end
                 end
 
                 STATE_BIAS_SET: begin
-                    if (bias_set_done) begin
-                        if (mac_state == STATE_BIAS_ADD) begin
-                            // BRAM 1 State
-                            if (output_cnt >= B_SIZE) begin
-                                bram_state1      <= STATE_IDLE;
-                            end
-                            else begin
-                                bram_state1      <= STATE_BRAM_CHECK;
-                            end
-                            
-                            // Global Data
-                            bias_set_done   <= 1'b0;
-                        end
-                        else begin
-                            // BRAM 1 State
-                            bram_state1     <= STATE_BIAS_SET;
-
-                            // Global Data
-                            bias_set_done   <= 1'b1;
-                        end
-
+                    if ((output_cnt << 2) >= B_SIZE) begin
+                        // BRAM 1 State
+                        bram_state1     <= STATE_IDLE;
+                        
                         // BRAM 1 Datas
                         bram_addr1      <= 16'hffff;
 
@@ -619,20 +602,23 @@ module student_fc_controller(
                         bram_latency1   <= 2'b0;
                         bram_counter1   <= 16'b0;
                         weight_set_done <= 1'b0;
+                        bias_set_done   <= 1'b0;
 
                         // Global Data
-                        input_cnt           <= input_cnt;
-                        output_cnt          <= output_cnt;
-                        data_valid          <= 4'b1111;
-                        layer               <= layer;
+                        input_cnt       <= 16'b0;
+                        output_cnt      <= 16'b0;
+                        data_valid      <= 4'b0000;
+                        layer           <= layer;
                     end
                     else begin
                         // BRAM 1 State
                         bram_state1     <= STATE_BIAS_SET;
                         
                         // BRAM 1 Datas
-                        bram_addr1      <= BIAS_START_ADDRESS + ((output_cnt - 1) >> 2);
-                        // bias
+                        if ((bram_counter1 << 2) < B_SIZE) begin
+                            bram_addr1 <= BIAS_START_ADDRESS + bram_counter1;
+                        end 
+                        // weight
 
                         // BRAM 1 Control Signals
                         bram_en1       <= 1'b1;
@@ -640,18 +626,25 @@ module student_fc_controller(
 
                         // BRAM 1 FSM Control Signals
                         if (bram_latency1 < MEM_LATENCY + 1) begin
-                            bram_latency1 <= bram_latency1 + 1'b1;
+                            bram_latency1   <= bram_latency1 + 1'b1;
                             bias_set_done <= 1'b0;
+
+                            // Global Data
+                            output_cnt      <= 16'b0;
+                            data_valid      <= 4'b0;
                         end else begin
                             bias <= bram_dout1;
                             bias_set_done <= 1'b1;
+                            
+                            // Global Data
+                            output_cnt      <= output_cnt + 1'b1;
+                            data_valid      <= 4'b1111 << ((B_SIZE - (output_cnt << 2)) >= 16'h4 ? 2'h0 : (3'h4 - (X_SIZE - (output_cnt << 2))));
                         end
+                        bram_counter1 <= bram_counter1 + 1'b1;
                         weight_set_done <= 1'b0;
-                        
+
                         // Global Data
-                        input_cnt  <= input_cnt;
-                        output_cnt <= output_cnt;
-                        data_valid <= data_valid;
+                        input_cnt  <= 16'b0;
                         layer      <= layer;
                     end
                 end
