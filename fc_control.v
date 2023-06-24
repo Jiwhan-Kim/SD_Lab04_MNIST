@@ -783,10 +783,10 @@ module student_fc_controller(
     assign temp_right = temp2 >= temp3 ? temp2 : temp3;
     assign temp_max_value = temp_left >= temp_right ? temp_left : temp_right;
 
-    assign temp0 = 2'h3 >= output_cnt[1:0] ? quad_result[31:24] : 8'h80;
-    assign temp1 = 2'h2 >= output_cnt[1:0] ? quad_result[23:16] : 8'h80;
-    assign temp2 = 2'h1 >= output_cnt[1:0] ? quad_result[15:8] : 8'h80;
-    assign temp3 = 2'h0 >= output_cnt[1:0] ? quad_result[7:0] : 8'h80;
+    assign temp0 = 2'h3 >= output_cnt_buffer[1:0] ? quad_result[31:24] : 8'h80;
+    assign temp1 = 2'h2 >= output_cnt_buffer[1:0] ? quad_result[23:16] : 8'h80;
+    assign temp2 = 2'h1 >= output_cnt_buffer[1:0] ? quad_result[15:8] : 8'h80;
+    assign temp3 = 2'h0 >= output_cnt_buffer[1:0] ? quad_result[7:0] : 8'h80;
 
 
 
@@ -814,6 +814,8 @@ module student_fc_controller(
     reg mac_add;
     reg ReLU;
 
+    reg [15:0] output_cnt_buffer;
+
     always @(posedge clk or negedge rstn) begin
         if (!rstn) begin
             // Add Bias Controller State
@@ -823,6 +825,7 @@ module student_fc_controller(
             bias_add_en <= 1'b0;
             mac_add     <= 1'b0;
             ReLU        <= 1'b0;
+            output_cnt_buffer <= 16'b0;
         end
         else begin
             case (add_state)
@@ -839,6 +842,7 @@ module student_fc_controller(
                     bias_add_en <= 1'b0;
                     mac_add     <= 1'b0;
                     ReLU        <= (layer < STAGE);
+                    output_cnt_buffer <= 16'b0;
                 end
 
                 STATE_BIAS_ADD: begin
@@ -850,6 +854,7 @@ module student_fc_controller(
                         bias_add_en <= 1'b1;
                         mac_add     <= 1'b1;
                         ReLU        <= ReLU;
+                        output_cnt_buffer <= output_cnt;
                     end
                     else begin
                         // Add Bias Controller State
@@ -859,6 +864,7 @@ module student_fc_controller(
                         bias_add_en <= 1'b1;
                         mac_add     <= 1'b0;
                         ReLU        <= ReLU;
+                        output_cnt_buffer <= 16'b0;
                     end
                 end
 
@@ -871,6 +877,7 @@ module student_fc_controller(
                     bias_add_en <= 1'b1;
                     mac_add     <= 1'b0;
                     ReLU        <= ReLU;
+                    output_cnt_buffer <= output_cnt_buffer;
                 end
 
                 STATE_DATA_SEND: begin
@@ -881,20 +888,21 @@ module student_fc_controller(
                     bias_add_en <= 1'b1;
                     mac_add     <= 1'b0;
                     ReLU        <= ReLU;
+                    output_cnt_buffer <= output_cnt_buffer;
                 end
 
                 STATE_SEARCH_MAX: begin
-                    $display("%d: %h", output_cnt + {~output_cnt[1:0] + 1'b1} - 4'h4, temp0[7:0]);
-                    $display("%d: %h", output_cnt + {~output_cnt[1:0] + 1'b1} - 4'h3, temp1[7:0]);
-                    $display("%d: %h", output_cnt + {~output_cnt[1:0] + 1'b1} - 4'h2, temp2[7:0]);
-                    $display("%d: %h", output_cnt + {~output_cnt[1:0] + 1'b1} - 4'h1, temp3[7:0]);
+                    $display("%d: %h", output_cnt_buffer + {~output_cnt_buffer[1:0] + 1'b1} - 4'h4, temp0[7:0]);
+                    $display("%d: %h", output_cnt_buffer + {~output_cnt_buffer[1:0] + 1'b1} - 4'h3, temp1[7:0]);
+                    $display("%d: %h", output_cnt_buffer + {~output_cnt_buffer[1:0] + 1'b1} - 4'h2, temp2[7:0]);
+                    $display("%d: %h", output_cnt_buffer + {~output_cnt_buffer[1:0] + 1'b1} - 4'h1, temp3[7:0]);
 
                     if (temp_max_value >= max_value) begin
                         max_value <= temp_max_value;
-                        if      (temp0 == temp_max_value) out_data <= output_cnt + {~output_cnt[1:0] + 1'b1} - 4'h4;
-                        else if (temp1 == temp_max_value) out_data <= output_cnt + {~output_cnt[1:0] + 1'b1} - 4'h3;
-                        else if (temp2 == temp_max_value) out_data <= output_cnt + {~output_cnt[1:0] + 1'b1} - 4'h2;
-                        else                              out_data <= output_cnt + {~output_cnt[1:0] + 1'b1} - 4'h1;
+                        if      (temp0 == temp_max_value) out_data <= output_cnt_buffer + {~output_cnt_buffer[1:0] + 1'b1} - 4'h4;
+                        else if (temp1 == temp_max_value) out_data <= output_cnt_buffer + {~output_cnt_buffer[1:0] + 1'b1} - 4'h3;
+                        else if (temp2 == temp_max_value) out_data <= output_cnt_buffer + {~output_cnt_buffer[1:0] + 1'b1} - 4'h2;
+                        else                              out_data <= output_cnt_buffer + {~output_cnt_buffer[1:0] + 1'b1} - 4'h1;
                     end
 
                     // Add Bias Controller State
