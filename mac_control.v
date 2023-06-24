@@ -97,13 +97,13 @@ module mac_controller (
         end
         else begin
             if (en) begin
-                if (mac_done) begin
+                if (flush) begin
+                    out_result  <= mac_result;
+                    done        <= (mac_last_out != 4'b0) ? 1'b1 : 1'b0;
+                end
+                else if (mac_done) begin
                     out_result <= out_result + mac_result;
                     done       <= (mac_last_out != 4'b0) ? 1'b1 : 1'b0;
-                end
-                else if (flush) begin
-                    out_result  <= mac_result;
-                    done        <= 1'b0;
                 end
                 else begin
                     out_result <= out_result;

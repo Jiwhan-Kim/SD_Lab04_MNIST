@@ -6,8 +6,23 @@
     Kim Ji Whan 
     2021189004
 
-    Version - 3.0.1. on 23.06.24. 23:27
+    Version - 3.0.3. on 23.06.25. 00:10
+    GitHub Repository - https://github.com/KimJiWhan/SD_Lab04_MNIST/tree/main
+    Total Delay - 60,355 Cycle
+
+    Output Vector
+    0:  -6.32298278808593 
+    1:  -3.04463195800781 
+    2:  -1.64878845214843 
+    3:  -1.43437194824218 
+    4:  -4.20248413085937 
+    5:  -0.99215698242188 
+    6:  -3.84484863281250 
+    7: -10.20820617675780 
+    8:   5.29801940917968 (o)
+    9:  -4.90875244140625 
 */
+
 module student_fc_controller(
     input wire  clk,
     input wire  rstn,
