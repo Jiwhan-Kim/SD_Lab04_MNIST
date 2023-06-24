@@ -1,3 +1,5 @@
+`timescale 1ns / 1ps
+
 module bias_add(
     input wire clk,
     input wire rstn,
@@ -21,15 +23,15 @@ module bias_add(
     wire signed  [7:0] bias2;
     wire signed  [7:0] bias3;
 
-    reg  signed [25:0] result_buffer0;
-    reg  signed [25:0] result_buffer1;
-    reg  signed [25:0] result_buffer2;
-    reg  signed [25:0] result_buffer3;
-
     assign bias0 = bias[31:24];
     assign bias1 = bias[23:16];
     assign bias2 = bias[15:8];
     assign bias3 = bias[7:0];
+    
+    reg  signed [25:0] result_buffer0;
+    reg  signed [25:0] result_buffer1;
+    reg  signed [25:0] result_buffer2;
+    reg  signed [25:0] result_buffer3;
 
     always @(posedge clk or negedge rstn) begin
         if (!rstn) begin

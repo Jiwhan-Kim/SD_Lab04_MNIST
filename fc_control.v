@@ -6,7 +6,7 @@
     Kim Ji Whan 
     2021189004
 
-    Version - 3.0.3. on 23.06.25. 00:10
+    Version - 3.0.4. on 23.06.25. 00:35
     GitHub Repository - https://github.com/KimJiWhan/SD_Lab04_MNIST/tree/main
     Total Delay - 60,355 Cycle
 
