@@ -1,5 +1,13 @@
 `timescale 1ns / 1ps
 
+/*
+    SYS3202 - System Semiconductor Design Lab04
+    MNIST Fully-Connected Layer Controller
+    Kim Ji Whan 
+    2021189004
+
+    Version - 2.0.3. on 23.06.24. 12:38
+*/
 module student_fc_controller(
     input wire  clk,
     input wire  rstn,

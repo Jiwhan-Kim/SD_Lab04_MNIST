@@ -141,31 +141,31 @@ module mac_controller (
     assign out_data[31:24] = ReLU ? (result_buffer0[25] == 1'b1) ? 8'b0
                                                                  : (result_buffer0[24:16] == 9'b0)   ? result_buffer0[15:8]
                                                                                                      : 8'hff
-                                  : (result_buffer0[25] == 1'b1) ? (result_buffer0[24:16] == 9'h1ff) ? result_buffer0[15:8]
+                                  : (result_buffer0[25] == 1'b1) ? (result_buffer0[24:15] == 10'h2ff) ? result_buffer0[15:8]
                                                                                                      : 8'h80
-                                                                 : (result_buffer0[24:16] == 9'b0)   ? result_buffer0[15:8]
+                                                                 : (result_buffer0[24:15] == 10'b0)   ? result_buffer0[15:8]
                                                                                                      : 8'h7f;
     assign out_data[23:16] = ReLU ? (result_buffer1[25] == 1'b1) ? 8'b0
                                                                  : (result_buffer1[24:16] == 9'b0)   ? result_buffer1[15:8]
                                                                                                      : 8'hff
-                                  : (result_buffer1[25] == 1'b1) ? (result_buffer1[24:16] == 9'h1ff) ? result_buffer1[15:8]
+                                  : (result_buffer1[25] == 1'b1) ? (result_buffer1[24:15] == 10'h2ff) ? result_buffer1[15:8]
                                                                                                      : 8'h80
-                                                                 : (result_buffer1[24:16] == 9'b0)   ? result_buffer1[15:8]
+                                                                 : (result_buffer1[24:15] == 9'b0)   ? result_buffer1[15:8]
                                                                                                      : 8'h7f;
 
     assign out_data[15: 8] = ReLU ? (result_buffer2[25] == 1'b1) ? 8'b0
                                                                  : (result_buffer2[24:16] == 9'b0)   ? result_buffer2[15:8]
                                                                                                      : 8'hff
-                                  : (result_buffer2[25] == 1'b1) ? (result_buffer2[24:16] == 9'h1ff) ? result_buffer2[15:8]
+                                  : (result_buffer2[25] == 1'b1) ? (result_buffer2[24:15] == 10'h2ff) ? result_buffer2[15:8]
                                                                                                      : 8'h80
-                                                                 : (result_buffer2[24:16] == 9'b0)   ? result_buffer2[15:8]
+                                                                 : (result_buffer2[24:15] == 9'b0)   ? result_buffer2[15:8]
                                                                                                      : 8'h7f;
 
     assign out_data[ 7: 0] = ReLU ? (result_buffer3[25] == 1'b1) ? 8'b0
                                                                  : (result_buffer3[24:16] == 9'b0)   ? result_buffer3[15:8]
                                                                                                      : 8'hff
-                                  : (result_buffer3[25] == 1'b1) ? (result_buffer3[24:16] == 9'h1ff) ? result_buffer3[15:8]
+                                  : (result_buffer3[25] == 1'b1) ? (result_buffer3[24:15] == 10'h2ff) ? result_buffer3[15:8]
                                                                                                      : 8'h80
-                                                                 : (result_buffer3[24:16] == 9'b0)   ? result_buffer3[15:8]
+                                                                 : (result_buffer3[24:15] == 9'b0)   ? result_buffer3[15:8]
                                                                                                      : 8'h7f;
 endmodule
